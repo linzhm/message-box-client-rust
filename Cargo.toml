@@ -1,0 +1,28 @@
+[package]
+name = "message-box-client"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.94"
+publish = false
+license-file = "LICENSE"
+description = "Typed, free-operation MessageBox HTTP client"
+
+[dependencies]
+async-trait = "0.1"
+bsv-sdk = { git = "https://github.com/bsv-blockchain/rs-sdk", rev = "99d2313f2ede48a465aa8be1907d26d098aac8fd", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["time"] }
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = []
+experimental-auth = ["bsv-sdk/network"]
+
+[[example]]
+name = "loopback"
+required-features = ["experimental-auth"]
