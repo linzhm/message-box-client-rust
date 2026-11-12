@@ -119,3 +119,10 @@ deployment. Standard errors use `description`; if a server instead emits a
 `message` field without it, `Error::Http` still retains status and raw body, while
 its typed `error` field is `None`. The client does not silently normalize that
 nonstandard error envelope.
+
+A response-authentication error can occur **after the server has committed a write**.
+The real TS negative test verifies this by changing only a genuine response's
+signature: the client rejects it, performs no send replay, and a separate
+recipient read proves the message was stored. Treat the prior write outcome as
+uncertain until reconciled; reconnect resets local SDK state, not remote effects.
+See [exact route coverage and negative acceptance](interop/README.md).

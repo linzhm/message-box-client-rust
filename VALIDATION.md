@@ -122,3 +122,34 @@ and HTTP status without being converted to the standard `description` envelope.
 Existing tests retain strict bool-or-0/1 device decoding. TS acceptance still uses
 real authentication and handlers with in-memory SQLite, not production MySQL.
 Redirect/expected-identity policies remain unchanged and experimental.
+
+## Real signed-response rejection acceptance (after 82dd7d1)
+
+Source audit confirmed all nine implemented client methods already call actual
+pinned TS production handlers through `postAuth`, not fabricated business routes.
+See the exact method/source matrix in interop/README.md. This remains an explicitly
+bounded real-auth/handler slice with in-memory SQLite; complete production app
+assembly and MySQL are not claimed. Previously covered lifecycle tests were not
+rerun just for this audit.
+
+New missing authentication property tested: reject an invalid response signature
+without silently accepting success or replaying a write. A loopback-only test proxy
+forwards a genuine request to the unchanged pinned TS implementation and flips one
+bit in the real successful send response's signature. The actual response status
+and business body are otherwise unchanged. Request and fault counts are exposed
+only through the test proxy's control endpoint.
+
+Executed:
+`cargo test --locked --features experimental-auth --test live_ts_response_auth -- --ignored --nocapture`
+returned exit 0: one new live test passed. It observed Authentication/signature
+error (not timeout/success), exactly one send and one corrupted response, then
+verified one stored message with exact ID/content/sender via direct authenticated
+production listMessages. Owner ack and empty reread also passed. Raw execution
+output is retained locally, not in this source-only payload.
+
+No product or upstream implementation change was needed: the pinned SDK already
+rejects the invalid proof. This closes a negative acceptance gap and documents the
+real uncertain-write boundary; it does not add pinning, redirect policy, retries,
+cryptography or general response normalization. Official boolean versus observed
+SQL 0/1 and standard description versus nonstandard message-only errors remain
+separate previously documented facts.
