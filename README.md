@@ -90,8 +90,32 @@ passes the authenticated free-API lifecycle against persistent private SQLite,
 including recovery of unacknowledged content after a graceful stop/start and
 persistent deletion after acknowledgement and another stop/start.
 
-An existing AuthFetch instance produced a connection-send error on its first read
-after restart. **Recovery tested here reconstructs Client/AuthTransport with the
-same wallet identity**; seamless retained-instance recovery is not claimed. The
-library does not silently retry writes. Details and the initial failure log are in
-[interop/RUST_SERVER.md](interop/RUST_SERVER.md).
+An existing AuthFetch instance can produce a connection-send error on its first
+read immediately after restart. An independent authenticated read first allowed
+the old instance to succeed in the controlled comparison, so this is not evidence
+of a deterministic session/protocol incompatibility. The SDK does not preserve
+the underlying reqwest error chain in its public error; the precise socket cause
+has not been established.
+
+Use `client.reconnect()` explicitly to replace cached SDK authentication and HTTP
+state **within the same Client**. It preserves wallet identity, origin, timeout and
+response limit. It performs no network I/O and does not replay the failed request;
+the next operation authenticates anew. An uncertain write must not be blindly
+repeated. Real TS and Rust tests verify content/identity preservation after reset.
+The optional AuthTransport also exposes the same `reconnect()` method directly.
+
+```rust,ignore
+// client is a mutable Client<AuthTransport>.
+client.reconnect();
+let page = client.list(&request).await?; // explicit next operation chosen by caller
+```
+
+See [restart acceptance](interop/RUST_SERVER.md) for the control and its limits.
+Raw logs remain local, outside this source-only Git history.
+
+Device `active` accepts official booleans and the observed SQL 0/1 representation
+(strictly rejecting other integers). This does not claim a tested production MySQL
+deployment. Standard errors use `description`; if a server instead emits a
+`message` field without it, `Error::Http` still retains status and raw body, while
+its typed `error` field is `None`. The client does not silently normalize that
+nonstandard error envelope.

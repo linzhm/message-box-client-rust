@@ -279,3 +279,14 @@ fn pagination(
     }
     Ok(q)
 }
+
+#[cfg(feature = "experimental-auth")]
+impl Client<transport::AuthTransport> {
+    /// Reset SDK authentication/connection state while keeping this client's
+    /// origin, wallet, timeout and response limit. No request is sent or retried.
+    /// Call explicitly after a connection failure, then choose the next operation;
+    /// do not blindly repeat a write whose outcome is uncertain.
+    pub fn reconnect(&mut self) {
+        self.transport.reconnect();
+    }
+}

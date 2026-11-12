@@ -11,7 +11,8 @@ No Kernel or server edits, remote push, PR, merge, publication or CI activation.
 Follow-up boundaries, not additional mechanisms authorized by this task:
 
 - Real TS and Rust free-operation lifecycle acceptance now passes. Rust normal
-  stop/start recovery is tested using an explicit fresh client with the same identity.
+  stop/start recovery is tested using explicit reconnect within the same Client,
+  preserving its identity and endpoint without replaying writes.
   Seamless reuse of the old AuthFetch instance is not claimed.
 - Redirect control and expected server identity pin are deployment strategies.
   The pinned SDK has no public pre-request policy/pin parameter; only the verified

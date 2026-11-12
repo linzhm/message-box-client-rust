@@ -21,7 +21,7 @@ fn client() -> (Client<AuthTransport>, String) {
 #[ignore = "requires the pinned loopback TS harness documented in interop/README.md"]
 async fn real_authenticated_message_lifecycle() {
     let (a, a_key) = client();
-    let (b, b_key) = client();
+    let (mut b, b_key) = client();
     b.set_permission(&SetPermissionRequest {
         message_box: "inbox".into(),
         sender: None,
@@ -67,6 +67,11 @@ async fn real_authenticated_message_lifecycle() {
         serde_json::from_str::<serde_json::Value>(&page.messages[0].body).unwrap()["message"],
         r#"{"hello":"世界","value":1}"#
     );
+    b.reconnect();
+    let reconnected = b.list(&request).await.unwrap();
+    assert_eq!(reconnected.messages[0].message_id, id);
+    assert_eq!(reconnected.messages[0].sender, a_key);
+    assert_eq!(reconnected.messages[0].body, page.messages[0].body);
     // The pinned SQLite route reports a hard duplicate as ERR_DUPLICATE_MESSAGE.
     let duplicate = a
         .send(&SendRequest {

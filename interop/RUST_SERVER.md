@@ -23,14 +23,39 @@ inbox policy and disables websockets/CORS. The first listener uses port 0;
 subsequent starts reuse the actual selected port with the same identity/data.
 No production credentials, message data or external service are used.
 
-A retained SDK AuthFetch instance failed its first post-restart read with a
-connection-send error. Initial failing evidence is retained locally with the original candidate; raw
-logs are deliberately excluded from this source-only tree. The passing test records that narrow error,
-then explicitly reconstructs AuthFetch with the same identity. Persisted unacked
-message content/sender, device and permission must match; acknowledgement must
-delete the message, and deletion must survive another restart. Three graceful
-SIGINT stops each require exit 0 and closed listener; owned temporary data is
-removed afterward. Transparent retained-instance recovery is not claimed.
+The original candidate required constructing a new Client after an observed
+connection-send error. The current API provides an explicit `Client::reconnect()`:
+it replaces the existing adapter's AuthFetch with the same wallet, keeping origin,
+timeout and response limit. No I/O or automatic request replay occurs in reset.
+
+The regression controls the endpoint and ordering:
+
+1. The server's actual bound address and public identity are asserted unchanged
+   across normal stops/starts. Each stop waits for exit 0 and a closed listener.
+2. At the first restart, an independent authenticated read succeeds at that exact
+   origin before the retained client's read. Both reads passed in the observed run.
+3. The retained Client explicitly reconnects; it must still read exact unacked
+   content/sender, then acknowledge it successfully.
+4. At the second restart, the retained client reads immediately after ready. The
+   observed run returned the original connection-send error. Explicit reconnect
+   within that same Client then successfully verifies persistent deletion.
+
+The old-instance read may succeed or return only that specific observed error
+category; other failures fail the test. The test does not force an intermittent
+failure or turn it into a production retry policy. The comparison establishes
+an ordering-sensitive transport outcome, not a proven SDK session protocol bug.
+The SDK converts reqwest's send error to a display string, losing its deeper
+source chain; no HTTP status was returned for the observed error.
+
+The SDK's own stale-session recovery recognizes SessionNotFound, a stale nonce
+marker or unsigned HTTP 401 from a known peer. The observed send error matches
+none of those. It exposes no public reset/injected transport. Reconstructing the
+existing SDK object is therefore the minimal explicit lifecycle operation; this
+client does not implement authentication or cryptography itself.
+
+Raw initial/baseline/regression logs remain in local preservation storage, not this
+source-only tree. All runtime data is synthetic and removed after the test.
+No transparent retained-instance recovery is claimed.
 
 ## SDK policy review
 

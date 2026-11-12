@@ -166,7 +166,7 @@ async fn authenticated_rust_lifecycle_and_restart() {
     let sender_id = sender_key.to_public_key().to_der_hex();
     let recipient_id = recipient_key.to_public_key().to_der_hex();
     let sender = client(&origin, sender_key);
-    let recipient = client(&origin, recipient_key.clone());
+    let mut recipient = client(&origin, recipient_key.clone());
     recipient
         .set_permission(&SetPermissionRequest {
             message_box: "inbox".into(),
@@ -261,8 +261,17 @@ async fn authenticated_rust_lifecycle_and_restart() {
     println!("PASS real auth, send/content/sender, recipient isolation, foreign ack refusal, device/permission APIs");
     server.stop();
     server.start();
-    // A stopped listener may invalidate the SDK's pooled connection. Record that
-    // narrow failure, then reconnect explicitly; never silently retry a write.
+    // Verify a complete independently authenticated read at the same endpoint
+    // before touching the retained client: this is not merely a ready-line check.
+    assert_eq!(server.origin(), origin);
+    let fresh_control = client(&origin, recipient_key.clone());
+    assert_message(
+        &fresh_control.list(&list).await.unwrap(),
+        &send.message.message_id,
+        &sender_id,
+    );
+    println!("CONTROL fresh authenticated read passed at identical origin before retained client");
+    // Preserve the observable old-instance result; reconnect never replays it.
     match recipient.list(&list).await {
         Ok(page) => {
             assert_message(&page, &send.message.message_id, &sender_id);
@@ -275,8 +284,8 @@ async fn authenticated_rust_lifecycle_and_restart() {
         }
         other => panic!("unexpected retained client result: {other:?}"),
     }
-    let recovery_key = recipient_key.clone();
-    let fresh = client(&origin, recipient_key);
+    recipient.reconnect();
+    let fresh = &recipient;
     assert_message(
         &fresh.list(&list).await.unwrap(),
         &send.message.message_id,
@@ -308,7 +317,7 @@ async fn authenticated_rust_lifecycle_and_restart() {
         .await
         .unwrap();
     assert!(fresh.list(&list).await.unwrap().messages.is_empty());
-    println!("PASS unacked message/device/permission persistence; fresh same-identity AuthFetch; ack deletes");
+    println!("PASS unacked message/device/permission persistence; same Client after explicit reconnect; ack deletes");
     fresh
         .set_permission(&SetPermissionRequest {
             message_box: "inbox".into(),
@@ -326,8 +335,23 @@ async fn authenticated_rust_lifecycle_and_restart() {
     );
     server.stop();
     server.start();
-    let recovered = client(&origin, recovery_key);
-    assert!(recovered.list(&list).await.unwrap().messages.is_empty());
+    assert_eq!(server.origin(), origin);
+    // Opposite order at the second restart: retained request immediately after
+    // ready, before any independent handshake. Keep the real result visible.
+    match recipient.list(&list).await {
+        Ok(page) => {
+            assert!(page.messages.is_empty());
+            println!("IMMEDIATE retained read passed");
+        }
+        Err(Error::Authentication(message))
+            if message.contains("HTTP request") && message.contains("error sending request") =>
+        {
+            println!("OBSERVED immediate retained connection-send error before explicit reconnect");
+        }
+        other => panic!("unexpected immediate read result: {other:?}"),
+    }
+    recipient.reconnect();
+    assert!(recipient.list(&list).await.unwrap().messages.is_empty());
     println!("PASS blocked sender and acknowledged deletion persists after second restart");
     server.stop();
     server.cleanup();

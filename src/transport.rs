@@ -31,16 +31,28 @@ pub trait Transport: Send + Sync {
 #[cfg(feature = "experimental-auth")]
 pub struct AuthTransport {
     auth: AuthFetch<Arc<ProtoWallet>>,
+    wallet: Arc<ProtoWallet>,
     timeout: Duration,
 }
 #[cfg(feature = "experimental-auth")]
 impl AuthTransport {
     pub fn new(wallet: ProtoWallet) -> Self {
+        let wallet = Arc::new(wallet);
         Self {
-            auth: AuthFetch::new(Arc::new(wallet)),
+            auth: AuthFetch::new(Arc::clone(&wallet)),
+            wallet,
             timeout: Duration::from_secs(30),
         }
     }
+    /// Forget cached SDK peers, sessions and their HTTP connections.
+    ///
+    /// Keeps the same wallet and configured timeout. This performs no I/O and
+    /// does not replay any request; the next explicit request authenticates anew.
+    /// A previous failed write can still have an unknown outcome.
+    pub fn reconnect(&mut self) {
+        self.auth = AuthFetch::new(Arc::clone(&self.wallet));
+    }
+
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self

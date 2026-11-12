@@ -328,3 +328,24 @@ async fn canonical_recipient_hex_and_sql_boolean() {
     let value = json!({"id":1,"deviceId":null,"platform":null,"fcmToken":"...synthetic","active":2,"createdAt":"2026-11-12","updatedAt":"2026-11-12","lastUsed":null});
     assert!(serde_json::from_value::<RegisteredDevice>(value).is_err());
 }
+
+#[tokio::test]
+async fn nonstandard_error_message_is_preserved_without_normalization() {
+    let payload = json!({"status":"error","code":"LEGACY_ERROR","message":"synthetic failure"});
+    let (client, _) = fixture(400, payload.clone());
+    let result = client
+        .acknowledge(&AckRequest {
+            message_ids: vec!["id".into()],
+        })
+        .await;
+    match result.unwrap_err() {
+        Error::Http {
+            status: 400,
+            error: None,
+            body,
+        } => {
+            assert_eq!(serde_json::from_slice::<Value>(&body).unwrap(), payload);
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
